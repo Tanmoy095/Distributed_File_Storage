@@ -1,4 +1,4 @@
-module github.com/filestore
+module github.com/Tanmoy095/Distributed_File_Storage
 
 go 1.21.4
 
