@@ -3,7 +3,6 @@ package p2p
 import (
 	"fmt"
 	"net"
-	"sync"
 )
 
 // tcp peer represent a remote node over a tcp established connection
@@ -32,13 +31,12 @@ type TCPTransportOpts struct {
 	ListenAddress string
 	ShakeHandFunc HandshakeFunc
 	Decoder       Decoder
+	onpeer        func(Peer) error
 }
 type TCPTransport struct {
 	TCPTransportOpts
 	listener net.Listener
 	rpcchn   chan RPC
-	mu       sync.Mutex
-	peers    map[net.Addr]Peer
 }
 
 func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
@@ -82,11 +80,29 @@ func (t *TCPTransport) StartAcceptLoop() {
 }
 
 func (t *TCPTransport) HandleConnection(conn net.Conn) {
+	var err error
+	defer func() {
+		fmt.Printf("dropping peer connection %s", err)
+		conn.Close()
+
+	}()
+
+	// basically here what happens is do an handshake if that ok we gonna do the onpeer if that fails
+	//we gonna drop . if that continue ..than start our read lopp
 	peer := NewTCPPeer(conn, true)
-	if err := t.ShakeHandFunc(peer); err != nil {
+
+	if err = t.ShakeHandFunc(peer); err != nil {
 		conn.Close()
 		fmt.Printf("TCP handshake error: %s\n", err)
 		return
+
+	}
+	//if somebody provides onpeer function
+	if t.onpeer != nil {
+		if err = t.onpeer(peer); err != nil {
+			return
+
+		}
 
 	}
 	//Read Loop
